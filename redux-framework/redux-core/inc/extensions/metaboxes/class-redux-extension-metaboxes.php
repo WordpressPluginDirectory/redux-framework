@@ -237,7 +237,23 @@ if ( ! class_exists( 'Redux_Extension_Metaboxes', false ) ) {
 			if ( empty( $this->boxes ) && class_exists( 'Redux_Metaboxes' ) ) {
 				$this->boxes = Redux_Metaboxes::construct_boxes( $this->parent->args['opt_name'] );
 			}
-
+			// Automatically push filter-registered fields into the allowlist.
+			if ( class_exists( 'Redux_Metaboxes' ) && ! empty( $this->boxes ) && is_array( $this->boxes ) ) {
+        		foreach ( $this->boxes as $box ) {
+            if ( isset( $box['sections'] ) && is_array( $box['sections'] ) ) {
+                foreach ( $box['sections'] as $section ) {
+                    if ( isset( $section['fields'] ) && is_array( $section['fields'] ) ) {
+                        foreach ( $section['fields'] as $field ) {
+                            // If the field isn't in the allowlist yet, add it.
+                            if (  ! empty( $field['id'] ) && ! isset( Redux_Metaboxes::$fields[ $this->parent->args['opt_name'] ][ $field['id'] ] ) ) {
+                                Redux_Metaboxes::$fields[ $this->parent->args['opt_name'] ][ $field['id'] ] = $field;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 			if ( empty( $this->boxes ) || ! is_array( $this->boxes ) ) {
 				return;
 			}
@@ -445,10 +461,17 @@ if ( ! class_exists( 'Redux_Extension_Metaboxes', false ) ) {
 			$this->parent->default_values();
 			$this->parent_defaults = $this->parent->options_defaults;
 
+			$field_args = Redux_Metaboxes::$fields[ $this->parent->args['opt_name'] ] ?? array();
+
 			$meta = $this->get_meta( $this->post_id );
 			$data = wp_parse_args( $meta, $this->options_defaults );
 
 			foreach ( $data as $key => $value ) {
+				if ( ! isset( $field_args[ $key ] ) ) {
+					unset( $data[ $key ] );
+					continue;
+				}
+
 				if ( isset( $meta[ $key ] ) && '' !== $meta[ $key ] ) {
 					$data[ $key ] = $meta[ $key ];
 					continue;
@@ -1397,7 +1420,13 @@ if ( ! class_exists( 'Redux_Extension_Metaboxes', false ) ) {
 				$dont_save = false;
 			}
 
+			$field_args = Redux_Metaboxes::$fields[ $this->parent->args['opt_name'] ] ?? array();
+
 			foreach ( Redux_Helpers::sanitize_array( wp_unslash( $_POST[ $this->parent->args['opt_name'] ] ) ) as $key => $value ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- Sanitized with `Redux_Helpers::sanitize_array`.
+				if ( ! isset( $field_args[ $key ] ) ) {
+					continue;
+				}
+
 				$save = true;
 
 				// parent_options.
